@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from llama_index.core.llms.llm import LLM
 from llama_index.core.prompts.base import PromptTemplate
 
@@ -27,7 +29,7 @@ Additionally, you MUST include hyperlinks to the relevant URLs wherever they are
 eg: Author, A. A. (Year, Month Date). Title of web page. Website Name. [url website](url)
 
 Please do your best, this is very important to my career.
-Assume that the current date is {date.today()}.
+Assume that the current date is {date_today}.
 """
     )
     response = await llm.apredict(
@@ -36,6 +38,7 @@ Assume that the current date is {date.today()}.
         question=query,
         total_words=1000,
         report_format="APA",
+        date_today=datetime.now(timezone.utc).strftime("%B %d, %Y"),
     )
 
     print("\n> Done generating report\n")

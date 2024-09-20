@@ -1,5 +1,6 @@
 import sys
 import asyncio
+import subprocess
 
 from dotenv import load_dotenv
 
@@ -15,12 +16,12 @@ async def main():
     llm = OpenAI(model="gpt-4o-mini")
     embed_model = OpenAIEmbedding(model="text-embedding-3-small")
     workflow = ResearchAssistantWorkflow(
-        llm=llm, embed_model=embed_model, verbose=True, timeout=60.0
+        llm=llm, embed_model=embed_model, verbose=True, timeout=240.0
     )
     # draw_all_possible_flows(workflow, filename="research_assistant_workflow.html")
     topic = sys.argv[1]
-    res = await workflow.run(query=topic)
-    print(res)
+    report_file = await workflow.run(query=topic)
+    subprocess.run(["open", report_file])
 
 
 if __name__ == "__main__":

@@ -1,5 +1,4 @@
 from typing import List, Any
-import subprocess
 
 from llama_index.core.schema import Document
 from llama_index.core.embeddings import BaseEmbedding
@@ -77,13 +76,13 @@ class ResearchAssistantWorkflow(Workflow):
 
     @step
     async def deligate_sub_queries(
-        self, ev: SubQueriesCreatedEvent
+        self, ctx: Context, ev: SubQueriesCreatedEvent
     ) -> ToProcessSubQueryEvent:
         for sub_query in ev.sub_queries:
-            self.send_event(ToProcessSubQueryEvent(sub_query=sub_query))
+            ctx.send_event(ToProcessSubQueryEvent(sub_query=sub_query))
         return None
 
-    @step(num_workers=5)
+    @step
     async def get_urls_for_subquery(
         self, ev: ToProcessSubQueryEvent
     ) -> ToScrapeWebContentsEvent:
@@ -137,14 +136,15 @@ class ResearchAssistantWorkflow(Workflow):
         return ReportPromptCreatedEvent(context=context)
 
     @step
-    async def write_report(self, ev: ReportPromptCreatedEvent) -> StopEvent:
+    async def write_report(
+        self, ctx: Context, ev: ReportPromptCreatedEvent
+    ) -> StopEvent:
         context = ev.context
-        query = await self.context.get("query")
+        query = await ctx.get("query")
         print(f"\n> Writing report. This will take a few minutes...\n")
         report = await generate_report_from_context(query, context, self.llm)
         pdf = MarkdownPdf()
         pdf.add_section(Section(report, toc=False))
         pdf.save("report.pdf")
         print("\n> Done writing report to report.pdf! Trying to open the file...\n")
-        subprocess.run(["open", "report.pdf"])
-        return StopEvent(result="Done")
+        return StopEvent(result="report.pdf")
