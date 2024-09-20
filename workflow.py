@@ -1,6 +1,7 @@
-from pydantic import BaseModel
 from typing import List, Any
 
+from llama_index.core.schema import Document
+from llama_index.core.embeddings import BaseEmbedding
 from llama_index.core.llms.llm import LLM
 from llama_index.core.workflow import (
     step,
@@ -13,11 +14,8 @@ from llama_index.core.workflow import (
 
 from subquery import get_sub_queries
 from tavily import get_urls_from_tavily_search
-
-
-class ContentChunk(BaseModel):
-    url: str
-    raw_content: str
+from scraper import get_scraped_docs_from_urls
+from compress import get_compressed_context
 
 
 class SubQueriesCreatedEvent(Event):
@@ -33,17 +31,18 @@ class ToScrapeWebContentsEvent(Event):
     urls: List[str]
 
 
-class ToCompressEvent(Event):
+class DocsScrapedEvent(Event):
     sub_query: str
-    chunks: List[ContentChunk]
+    docs: List[Document]
 
 
 class ToCombineContextEvent(Event):
+    sub_query: str
     context: str
 
 
 class ReportPromptCreatedEvent(Event):
-    prompt: str
+    context: str
 
 
 class LLMResponseEvent(Event):
@@ -54,11 +53,13 @@ class ResearchAssistantWorkflow(Workflow):
     def __init__(
         self,
         *args: Any,
-        llm: LLM | None = None,
+        llm: LLM,
+        embed_model: BaseEmbedding,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.llm = llm
+        self.embed_model = embed_model
         self.visited_urls: set[str] = set()
 
     @step
@@ -79,7 +80,7 @@ class ResearchAssistantWorkflow(Workflow):
             self.send_event(ToProcessSubQueryEvent(sub_query=sub_query))
         return None
 
-    @step(num_workers=3)
+    @step(num_workers=5)
     async def get_urls_for_subquery(
         self, ev: ToProcessSubQueryEvent
     ) -> ToScrapeWebContentsEvent:
@@ -93,16 +94,45 @@ class ResearchAssistantWorkflow(Workflow):
                 new_urls.append(url)
         return ToScrapeWebContentsEvent(sub_query=sub_query, urls=new_urls)
 
+    @step(num_workers=5)
+    async def scrape_web_contents(
+        self, ev: ToScrapeWebContentsEvent
+    ) -> DocsScrapedEvent:
+        sub_query = ev.sub_query
+        urls = ev.urls
+        print(f"\nScraping web contents for sub query: {sub_query}\n")
+        docs = get_scraped_docs_from_urls(urls)
+        return DocsScrapedEvent(sub_query=sub_query, docs=docs)
+
+    @step(num_workers=5)
+    async def compress_docs(self, ev: DocsScrapedEvent) -> ToCombineContextEvent:
+        sub_query = ev.sub_query
+        docs = ev.docs
+        print(f"\nCompressing docs for sub query: {sub_query}\n")
+        compressed_context = await get_compressed_context(
+            sub_query, docs, self.embed_model
+        )
+        return ToCombineContextEvent(sub_query=sub_query, context=compressed_context)
+
     @step
-    async def pseudo_end(self, ctx: Context, ev: ToScrapeWebContentsEvent) -> StopEvent:
+    async def combine_contexts(
+        self, ctx: Context, ev: ToCombineContextEvent
+    ) -> ReportPromptCreatedEvent:
         events = ctx.collect_events(
-            ev, [ToScrapeWebContentsEvent] * await ctx.get("num_sub_queries")
+            ev, [ToCombineContextEvent] * await ctx.get("num_sub_queries")
         )
         if events is None:
             return None
 
-        result = {}
+        context = ""
 
         for event in events:
-            result[event.sub_query] = event.urls
-        return StopEvent(result=result)
+            context += (
+                f'Research findings for topic "{event.sub_query}":\n{event.context}\n\n'
+            )
+
+        return ReportPromptCreatedEvent(context=context)
+
+    @step
+    async def pseudo_end(self, ctx: Context, ev: ReportPromptCreatedEvent) -> StopEvent:
+        return StopEvent(result=ev.context)
