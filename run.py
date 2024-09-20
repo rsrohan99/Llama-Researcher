@@ -1,3 +1,4 @@
+import sys
 import asyncio
 
 from dotenv import load_dotenv
@@ -17,7 +18,8 @@ async def main():
         llm=llm, embed_model=embed_model, verbose=True, timeout=60.0
     )
     # draw_all_possible_flows(workflow, filename="research_assistant_workflow.html")
-    res = await workflow.run(query="Widevine DRM")
+    topic = sys.argv[1]
+    res = await workflow.run(query=topic)
     print(res)
 
 

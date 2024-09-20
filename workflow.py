@@ -1,4 +1,5 @@
 from typing import List, Any
+import subprocess
 
 from llama_index.core.schema import Document
 from llama_index.core.embeddings import BaseEmbedding
@@ -11,11 +12,13 @@ from llama_index.core.workflow import (
     StartEvent,
     StopEvent,
 )
+from markdown_pdf import MarkdownPdf, Section
 
 from subquery import get_sub_queries
 from tavily import get_urls_from_tavily_search
 from scraper import get_scraped_docs_from_urls
 from compress import get_compressed_context
+from report import generate_report_from_context
 
 
 class SubQueriesCreatedEvent(Event):
@@ -85,7 +88,7 @@ class ResearchAssistantWorkflow(Workflow):
         self, ev: ToProcessSubQueryEvent
     ) -> ToScrapeWebContentsEvent:
         sub_query = ev.sub_query
-        print(f"\nGetting urls for sub query: {sub_query}\n")
+        print(f"\n> Getting urls for sub query: {sub_query}\n")
         urls = await get_urls_from_tavily_search(sub_query)
         new_urls = []
         for url in urls:
@@ -100,7 +103,7 @@ class ResearchAssistantWorkflow(Workflow):
     ) -> DocsScrapedEvent:
         sub_query = ev.sub_query
         urls = ev.urls
-        print(f"\nScraping web contents for sub query: {sub_query}\n")
+        print(f"\n> Scraping web contents for sub query: {sub_query}\n")
         docs = get_scraped_docs_from_urls(urls)
         return DocsScrapedEvent(sub_query=sub_query, docs=docs)
 
@@ -108,7 +111,7 @@ class ResearchAssistantWorkflow(Workflow):
     async def compress_docs(self, ev: DocsScrapedEvent) -> ToCombineContextEvent:
         sub_query = ev.sub_query
         docs = ev.docs
-        print(f"\nCompressing docs for sub query: {sub_query}\n")
+        print(f"\n> Compressing docs for sub query: {sub_query}\n")
         compressed_context = await get_compressed_context(
             sub_query, docs, self.embed_model
         )
@@ -134,5 +137,14 @@ class ResearchAssistantWorkflow(Workflow):
         return ReportPromptCreatedEvent(context=context)
 
     @step
-    async def pseudo_end(self, ctx: Context, ev: ReportPromptCreatedEvent) -> StopEvent:
-        return StopEvent(result=ev.context)
+    async def write_report(self, ev: ReportPromptCreatedEvent) -> StopEvent:
+        context = ev.context
+        query = await self.context.get("query")
+        print(f"\n> Writing report. This will take a few minutes...\n")
+        report = await generate_report_from_context(query, context, self.llm)
+        pdf = MarkdownPdf()
+        pdf.add_section(Section(report, toc=False))
+        pdf.save("report.pdf")
+        print("\n> Done writing report to report.pdf! Trying to open the file...\n")
+        subprocess.run(["open", "report.pdf"])
+        return StopEvent(result="Done")
