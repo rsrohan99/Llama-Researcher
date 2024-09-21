@@ -94,6 +94,7 @@ class ResearchAssistantWorkflow(Workflow):
             if url not in self.visited_urls:
                 self.visited_urls.add(url)
                 new_urls.append(url)
+        print(f'\n> Found {len(urls)} urls for "{sub_query}": {new_urls}\n')
         return ToScrapeWebContentsEvent(sub_query=sub_query, urls=new_urls)
 
     @step(num_workers=5)

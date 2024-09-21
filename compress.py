@@ -23,6 +23,9 @@ async def get_compressed_context(
     processor = SimilarityPostprocessor(similarity_cutoff=0.38)
     filtered_nodes = processor.postprocess_nodes(nodes)
     # print(filtered_nodes)
+    print(
+        f"\n> Filtered {len(filtered_nodes)} nodes from {len(nodes)} nodes for subquery: {query}\n"
+    )
 
     context = ""
 
