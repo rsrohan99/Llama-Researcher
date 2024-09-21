@@ -14,8 +14,7 @@ from llama_index.core.workflow import (
 from markdown_pdf import MarkdownPdf, Section
 
 from subquery import get_sub_queries
-from tavily import get_urls_from_tavily_search
-from scraper import get_scraped_docs_from_urls
+from tavily import get_docs_from_tavily_search
 from compress import get_compressed_context
 from report import generate_report_from_context
 
@@ -26,11 +25,6 @@ class SubQueriesCreatedEvent(Event):
 
 class ToProcessSubQueryEvent(Event):
     sub_query: str
-
-
-class ToScrapeWebContentsEvent(Event):
-    sub_query: str
-    urls: List[str]
 
 
 class DocsScrapedEvent(Event):
@@ -83,31 +77,17 @@ class ResearchAssistantWorkflow(Workflow):
         return None
 
     @step
-    async def get_urls_for_subquery(
+    async def get_docs_for_subquery(
         self, ev: ToProcessSubQueryEvent
-    ) -> ToScrapeWebContentsEvent:
-        sub_query = ev.sub_query
-        print(f"\n> Getting urls for sub query: {sub_query}\n")
-        urls = await get_urls_from_tavily_search(sub_query)
-        new_urls = []
-        for url in urls:
-            if url not in self.visited_urls:
-                self.visited_urls.add(url)
-                new_urls.append(url)
-        print(f'\n> Found {len(urls)} urls for "{sub_query}": {new_urls}\n')
-        return ToScrapeWebContentsEvent(sub_query=sub_query, urls=new_urls)
-
-    @step(num_workers=5)
-    async def scrape_web_contents(
-        self, ev: ToScrapeWebContentsEvent
     ) -> DocsScrapedEvent:
         sub_query = ev.sub_query
-        urls = ev.urls
-        print(f"\n> Scraping web contents for sub query: {sub_query}\n")
-        docs = get_scraped_docs_from_urls(urls)
+        docs, visited_urls = await get_docs_from_tavily_search(
+            sub_query, self.visited_urls
+        )
+        self.visited_urls = visited_urls
         return DocsScrapedEvent(sub_query=sub_query, docs=docs)
 
-    @step(num_workers=5)
+    @step(num_workers=3)
     async def compress_docs(self, ev: DocsScrapedEvent) -> ToCombineContextEvent:
         sub_query = ev.sub_query
         docs = ev.docs

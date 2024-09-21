@@ -33,6 +33,7 @@ async def get_compressed_context(
         node = node_with_score.node
         node_info = (
             f"---\nSource: {node.metadata.get('source', 'Unknown')}\n"
+            f"Title: {node.metadata.get('title', '')}\n"
             f"Content: {node.text}\n---\n"
         )
         context += node_info + "\n"
