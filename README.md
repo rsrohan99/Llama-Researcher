@@ -10,6 +10,8 @@ Stack Used:
 
 Full tutorial 👇
 
+[![Llama-Researcher](https://img.youtube.com/vi/gHdQcoeNgMU/maxresdefault.jpg)](https://www.youtube.com/watch?v=gHdQcoeNgMU)
+
 ## How to use
 
 - Clone the repo
