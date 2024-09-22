@@ -1,6 +1,6 @@
 # Llama Researcher
 
-In this tutorial, we'll create LLama-Researcher using LlamaIndex workflows, inspired by GPT-Researcher.
+In this tutorial, we'll create LLama-Researcher using LlamaIndex workflows, inspired by [GPT-Researcher.](https://github.com/assafelovic/gpt-researcher)
 
 Stack Used:
 
